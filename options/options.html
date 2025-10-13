@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="color-scheme" content="light dark" />
+  <title>WA - Download Guard 🛡️— Opções</title>
+  <style>
+    :root{
+      color-scheme: light dark;
+
+      /* Light (default) */
+      --bg:#f6f7fb;
+      --card:#ffffff;
+      --text:#1f2328;
+      --muted:#606773;
+      --border:#e5e7eb;
+      --input-bg:#ffffff;
+      --input-fg:var(--text);
+      --btn-bg:#f3f4f6;
+      --btn-fg:var(--text);
+      --btn-border:#d1d5db;
+      --accent:#16a34a;
+      --accent-600:#15803d;
+      --danger:#dc2626;
+      --shadow:0 8px 24px rgba(0,0,0,.08);
+    }
+    @media (prefers-color-scheme: dark){
+      :root{
+        --bg:#0f1115;
+        --card:#16181d;
+        --text:#e5e7eb;
+        --muted:#9aa2b1;
+        --border:#2b303b;
+        --input-bg:#0f1115;
+        --input-fg:#e5e7eb;
+        --btn-bg:#1c212b;
+        --btn-fg:#e5e7eb;
+        --btn-border:#2b303b;
+        --shadow:0 8px 24px rgba(0,0,0,.55);
+      }
+    }
+
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0; padding:24px;
+      font:14px/1.35 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji";
+      background:var(--bg); color:var(--text);
+    }
+
+    .container{
+      max-width:860px; margin:0 auto;
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:20px 20px 16px;
+      box-shadow:var(--shadow);
+    }
+
+    h1{margin:0 0 12px; font-size:18px; font-weight:700}
+
+    .row{margin:12px 0}
+
+    label.inline{display:flex; align-items:center; gap:10px; user-select:none}
+
+    input[type="checkbox"]{width:18px;height:18px; accent-color:var(--accent)}
+
+    input[type="text"]{
+      width:100%; padding:10px 12px;
+      background:var(--input-bg); color:var(--input-fg);
+      border:1px solid var(--border); border-radius:8px; outline:none;
+    }
+    input[type="text"]::placeholder{color:var(--muted)}
+    input[type="text"]:focus{
+      border-color: color-mix(in oklab, var(--accent) 60%, transparent);
+      box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 25%, transparent);
+    }
+
+    .buttons{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+
+    .btn{
+      border:1px solid var(--btn-border);
+      background:var(--btn-bg); color:var(--btn-fg);
+      border-radius:8px; padding:8px 12px; font-weight:600; cursor:pointer;
+      transition:transform .02s ease, background .15s ease, border-color .15s ease, color .15s ease;
+    }
+    .btn:active{transform:translateY(1px)}
+    .btn.primary{background:var(--accent); border-color:var(--accent); color:#fff}
+    .btn.primary:hover{background:var(--accent-600); border-color:var(--accent-600)}
+
+    .status{min-height:1.2em; font-size:12px; margin-left:6px}
+    .status.ok{color:var(--accent)}
+    .status.err{color:var(--danger)}
+
+    .help{color:var(--muted); font-size:12px; margin-top:6px}
+    .meta{color:var(--muted); font-size:12px; margin-top:8px}
+    code.k{padding:0 6px; border-radius:5px; background: color-mix(in oklab, var(--border) 50%, transparent)}
+    hr.sep{border:0; border-top:1px solid var(--border); margin:12px 0}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>WA - Download Guard 🛡️</h1>
+
+    <div class="row">
+        <label class="inline">
+          <input type="checkbox" id="enabled" checked disabled aria-disabled="true" />
+          <span>Ativar bloqueio de downloads do WhatsApp <small style="color:var(--muted)">— sempre ativo por política</small></span>
+        </label>
+    </div>
+    
+    <div class="row">
+      <label for="configUrl" class="inline" style="gap:6px; align-items:flex-start; flex-direction:column">
+        <span>URL da allowlist (JSON)</span>
+        <input type="text" id="configUrl" placeholder="https://gist.githubusercontent.com/.../raw/.../allowlist.json" />
+      </label>
+      <div class="help">Cole aqui o link <em>RAW</em> do Gist com a policy.</div>
+    </div>
+
+    <div class="row buttons">
+      <button id="save" class="btn primary">Salvar</button>
+      <button id="refresh" class="btn">Atualizar agora</button>
+      <span id="status" class="status"></span>
+    </div>
+
+    <hr class="sep" />
+
+    <div id="info" class="meta">Carregando…</div>
+    <div class="help">
+      Dica: mantenha apenas tipos comuns (ex.: <code class="k">pdf</code>, <code class="k">jpg</code>) e evite executáveis/arquivos compactados.
+    </div>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>
