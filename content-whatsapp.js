@@ -40,15 +40,55 @@
     const st = document.createElement('style');
     st.id = 'wa-dl-guard-toast-style';
     st.textContent = `
-      #wa-dl-guard-toast-host { position: fixed; right: 16px; top: 16px; z-index: 2147483647;
-        display: flex; flex-direction: column; gap: 8px; pointer-events: none;
-        font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
-      .wa-dl-guard-toast { background: rgba(230, 0, 0, 0.92); color: #fff; border-radius: 10px;
-        padding: 10px 12px; min-width: 260px; max-width: 360px; box-shadow: 0 6px 18px rgba(0,0,0,.35);
-        opacity: 0; transform: translateY(-8px); transition: opacity .16s ease, transform .16s ease; }
-      .wa-dl-guard-toast.show { opacity: 1; transform: translateY(0); }
-      .wa-dl-guard-toast .title { font-weight: 700; margin-bottom: 2px; }
-      .wa-dl-guard-toast .msg { opacity: .9; font-size: 12px; }
+      #wa-dl-guard-toast-host { 
+        position: fixed; right: 20px; top: 20px; z-index: 2147483647;
+        display: flex; flex-direction: column; gap: 12px; pointer-events: none;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      }
+      .wa-dl-guard-toast { 
+        background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+        color: #fff; 
+        border-radius: 12px;
+        padding: 16px 18px; 
+        min-width: 300px; 
+        max-width: 400px; 
+        box-shadow: 0 10px 40px rgba(220, 38, 38, 0.3), 0 4px 12px rgba(0, 0, 0, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        opacity: 0; 
+        transform: translateX(20px) scale(0.95); 
+        transition: opacity .3s cubic-bezier(0.4, 0, 0.2, 1), 
+                    transform .3s cubic-bezier(0.4, 0, 0.2, 1);
+        backdrop-filter: blur(10px);
+      }
+      .wa-dl-guard-toast.show { 
+        opacity: 1; 
+        transform: translateX(0) scale(1); 
+      }
+      .wa-dl-guard-toast-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 8px;
+      }
+      .wa-dl-guard-toast-icon {
+        font-size: 28px;
+        line-height: 1;
+        filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+      }
+      .wa-dl-guard-toast .title { 
+        font-weight: 700; 
+        font-size: 15px;
+        letter-spacing: -0.01em;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+        flex: 1;
+      }
+      .wa-dl-guard-toast .msg { 
+        font-size: 13px;
+        line-height: 1.5;
+        opacity: 0.95;
+        padding-left: 40px;
+        font-weight: 500;
+      }
     `;
     (document.head || document.documentElement).appendChild(st);
     const host = document.createElement('div');
@@ -63,11 +103,20 @@
       if (!host) return;
       const el = document.createElement('div');
       el.className = 'wa-dl-guard-toast';
-      el.innerHTML = `<div class="title">🛡️ ${title}</div><div class="msg">${msg || ''}</div>`;
+      el.innerHTML = `
+        <div class="wa-dl-guard-toast-header">
+          <div class="wa-dl-guard-toast-icon">🛡️</div>
+          <div class="title">${title}</div>
+        </div>
+        <div class="msg">${msg || ''}</div>
+      `;
       host.appendChild(el);
       void el.offsetHeight;
       el.classList.add('show');
-      setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 180); }, 2600);
+      setTimeout(() => { 
+        el.classList.remove('show'); 
+        setTimeout(() => el.remove(), 300); 
+      }, 5000); // 5 segundos em tela
     } catch {}
   }
 
@@ -101,8 +150,8 @@
   const BLOCK = (why, details) => {
     // se estiver desativado, não faz nada
     if (!enabled) return;
-    showToast('Download bloqueado', details || 'Tipo não permitido pela política.');
-    try { chrome.runtime?.sendMessage?.({ type: 'wa-blocked-notify', why }); } catch {}
+    showToast('WA - Download Guard', details || 'Download bloqueado pela política aplicada');
+    try { chrome.runtime?.sendMessage?.({ type: 'wa-blocked-notify', why, details }); } catch {}
   };
 
   // ======== Interceptores ========
@@ -110,11 +159,15 @@
     if (!enabled) return; // toggle OFF → passa tudo
     const href = anchor.getAttribute('href') || anchor.href || '';
     if (!isWAishUrl(href)) return;
+    
+    // Ignora se for navegação normal (sem download attribute e sem extensão de arquivo na URL)
     const dn = anchor.getAttribute('download') || anchor.download || '';
+    if (!dn && !extFromUrl(href)) return; // navegação normal, não é download
+    
     if (shouldBlockByExt(href, dn)) {
       e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation();
-      const ext = (dn && extFromFilename(dn)) || extFromUrl(href) || '(desconhecido)';
-      BLOCK('anchor', hasPolicy ? `Bloqueado: .${ext}` : 'Bloqueado: nenhuma policy carregada');
+      const ext = (dn && extFromFilename(dn)) || extFromUrl(href) || 'desconhecido';
+      BLOCK('anchor', hasPolicy ? `Download bloqueado: extensão .${ext} bloqueada pela política aplicada` : 'Download bloqueado: nenhuma política carregada');
     }
   }
 
@@ -135,9 +188,12 @@
       const href = this.getAttribute('href') || this.href || '';
       if (isWAishUrl(href)) {
         const dn = this.getAttribute('download') || this.download || '';
+        // Ignora se for navegação normal (sem download attribute e sem extensão de arquivo)
+        if (!dn && !extFromUrl(href)) return _aClick.apply(this, args);
+        
         if (shouldBlockByExt(href, dn)) {
-          const ext = (dn && extFromFilename(dn)) || extFromUrl(href) || '(desconhecido)';
-          BLOCK('anchor-programmatic', hasPolicy ? `Bloqueado: .${ext}` : 'Bloqueado: nenhuma policy carregada');
+          const ext = (dn && extFromFilename(dn)) || extFromUrl(href) || 'desconhecido';
+          BLOCK('anchor-programmatic', hasPolicy ? `Download bloqueado: extensão .${ext} bloqueada pela política aplicada` : 'Download bloqueado: nenhuma política carregada');
           return; // bloqueado
         }
       }
@@ -152,9 +208,10 @@
     value: function(url, ...rest) {
       if (!enabled) return _open.call(window, url, ...rest);
       const s = String(url || '');
-      if (isWAishUrl(s) && shouldBlockByExt(s, '')) {
-        const ext = extFromUrl(s) || '(desconhecido)';
-        BLOCK('window-open', hasPolicy ? `Bloqueado: .${ext}` : 'Bloqueado: nenhuma policy carregada');
+      // Só bloqueia window.open se tiver extensão de arquivo (download real)
+      if (isWAishUrl(s) && extFromUrl(s) && shouldBlockByExt(s, '')) {
+        const ext = extFromUrl(s) || 'desconhecido';
+        BLOCK('window-open', hasPolicy ? `Download bloqueado: extensão .${ext} bloqueada pela política aplicada` : 'Download bloqueado: nenhuma política carregada');
         return null;
       }
       return _open.call(window, url, ...rest);
@@ -169,11 +226,15 @@
     if (!(a instanceof HTMLAnchorElement)) return;
     const href = a.getAttribute('href') || a.href || '';
     if (!isWAishUrl(href)) return;
+    
+    // Ignora se for navegação normal (sem download attribute e sem extensão de arquivo)
     const dn = a.getAttribute('download') || a.download || '';
+    if (!dn && !extFromUrl(href)) return;
+    
     if (shouldBlockByExt(href, dn)) {
       e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation();
-      const ext = (dn && extFromFilename(dn)) || extFromUrl(href) || '(desconhecido)';
-      BLOCK('anchor-enter', hasPolicy ? `Bloqueado: .${ext}` : 'Bloqueado: nenhuma policy carregada');
+      const ext = (dn && extFromFilename(dn)) || extFromUrl(href) || 'desconhecido';
+      BLOCK('anchor-enter', hasPolicy ? `Download bloqueado: extensão .${ext} bloqueada pela política aplicada` : 'Download bloqueado: nenhuma política carregada');
     }
   }, true);
 

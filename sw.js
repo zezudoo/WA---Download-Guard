@@ -33,6 +33,10 @@ const extFromFilename = (name) => {
 const extFromUrl = (url) => { try { return extFromFilename(new URL(url).pathname); } catch { return ''; } };
 
 // ===================== Notificações =====================
+// Cache para evitar notificações duplicadas (download ID → timestamp)
+const notifiedDownloads = new Map();
+const NOTIFY_COOLDOWN_MS = 3000; // 3 segundos de cooldown por download ID
+
 async function notify(message, title = 'WhatsApp Download Guard') {
   try {
     await chrome.notifications.create('', {
@@ -43,6 +47,26 @@ async function notify(message, title = 'WhatsApp Download Guard') {
       priority: 1
     });
   } catch {}
+}
+
+async function notifyOnce(downloadId, message, title = 'WhatsApp Download Guard') {
+  const now = Date.now();
+  const lastNotified = notifiedDownloads.get(downloadId);
+  
+  // Se já notificou recentemente este download, ignora
+  if (lastNotified && (now - lastNotified) < NOTIFY_COOLDOWN_MS) {
+    return;
+  }
+  
+  notifiedDownloads.set(downloadId, now);
+  await notify(message, title);
+  
+  // Limpa cache antigo (mantém apenas últimos 100 IDs)
+  if (notifiedDownloads.size > 100) {
+    const entries = Array.from(notifiedDownloads.entries());
+    entries.sort((a, b) => a[1] - b[1]); // ordena por timestamp
+    entries.slice(0, 50).forEach(([id]) => notifiedDownloads.delete(id)); // remove os 50 mais antigos
+  }
 }
 
 async function cancelAndErase(id) {
@@ -147,13 +171,17 @@ function decideAllow(policy, { url, filename, mime }) {
 }
 
 // ===================== Hooks de downloads =====================
-// NÃO chamar suggest().
+// Cache para rastrear downloads já processados e evitar processamento duplicado
+const processedDownloads = new Map();
 
 chrome.downloads.onDeterminingFilename.addListener(async (item /*, suggest */) => {
   try {
     if (!(await isEnabled())) return;
     if (!isFromWhatsApp(item)) return;
 
+    // Marca como processado neste evento
+    processedDownloads.set(item.id, 'onDeterminingFilename');
+
     const policy = await getPolicyForDecision();
     const allow = decideAllow(policy, {
       url: item.finalUrl || item.url || '',
@@ -162,19 +190,31 @@ chrome.downloads.onDeterminingFilename.addListener(async (item /*, suggest */) =
     });
 
     if (!allow) {
+      const ext = extFromFilename(item.filename || '') || extFromUrl(item.finalUrl || item.url || '') || 'desconhecido';
       await cancelAndErase(item.id);
-      await notify('Download do WhatsApp bloqueado pela política.');
+      await notifyOnce(item.id, `Download bloqueado: extensão .${ext} bloqueada pela política aplicada`);
     }
+    
+    // Limpa cache após 5 segundos
+    setTimeout(() => processedDownloads.delete(item.id), 5000);
   } catch (e) {
     console.debug('[WA DL Guard] erro onDeterminingFilename:', e?.message || e);
   }
 });
 
-// Fallback
+// Fallback - só processa se onDeterminingFilename não pegou
 chrome.downloads.onCreated.addListener(async (item) => {
   try {
     if (!(await isEnabled())) return;
     if (!isFromWhatsApp(item)) return;
+    
+    // Se já foi processado no onDeterminingFilename, ignora
+    if (processedDownloads.has(item.id)) {
+      return;
+    }
+    
+    // Marca como processado
+    processedDownloads.set(item.id, 'onCreated');
 
     const policy = await getPolicyForDecision();
     const allow = decideAllow(policy, {
@@ -184,9 +224,13 @@ chrome.downloads.onCreated.addListener(async (item) => {
     });
 
     if (!allow) {
+      const ext = extFromFilename(item.filename || '') || extFromUrl(item.finalUrl || item.url || '') || 'desconhecido';
       await cancelAndErase(item.id);
-      await notify('Download do WhatsApp bloqueado (fallback).');
+      await notifyOnce(item.id, `Download bloqueado: extensão .${ext} bloqueada pela política aplicada`);
     }
+    
+    // Limpa cache após 5 segundos
+    setTimeout(() => processedDownloads.delete(item.id), 5000);
   } catch (e) {
     console.debug('[WA DL Guard] erro onCreated:', e?.message || e);
   }
@@ -213,7 +257,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   }
 
   if (msg.type === 'wa-blocked-notify') {
-    notify('Ação de download bloqueada no WhatsApp.');
+    notify(msg.details || 'Download bloqueado pela política aplicada');
   }
 });
 
