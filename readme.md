@@ -31,7 +31,6 @@ O **WA - Download Guard** monitora downloads iniciados no **WhatsApp Web** e **b
 
 ## Recursos
 
-* ✅ **Bloqueio sempre ativo** — não existe opção para desativar nas configurações.
 * ✅ **Preload das regras** — carrega/recacheia as listas ao iniciar o navegador, ao instalar/atualizar a extensão e ao abrir o WhatsApp Web.
 * ✅ **Listas flexíveis** — por **extensão** (ex.: `.zip`, `.exe`, `.js`) e, opcionalmente, por **MIME type**.
 * ✅ **Aviso amigável** — feedback visual quando um download é bloqueado.
