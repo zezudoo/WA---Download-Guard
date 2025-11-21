@@ -21,7 +21,7 @@
     "https://*.whatsapp.com/*",
     "https://*.whatsapp.net/*",
     "https://wa.me/*",
-    "https://gist.githubusercontent.com/*"
+    "https://wazap.coopavel.com.br/*"
   ],
   "background": { "service_worker": "sw.js", "type": "module" },
   "content_scripts": [

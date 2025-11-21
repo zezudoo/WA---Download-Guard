@@ -6,7 +6,7 @@ const STORAGE = {
 };
 
 const DEFAULT_CONFIG_URL =
-  'https://gist.githubusercontent.com/zezudoo/3af8883fd0699ae5b6e6fd5443c4e41e/raw/6a9186bcffb443a82070d1e6ed74948f2045def0/allowlist_wa_guard.json';
+  'https://wazap.coopavel.com.br:8090/allowlist_wa_guard.json';
 
 const $ = (id) => document.getElementById(id);
 
