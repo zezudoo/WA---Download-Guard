@@ -15,6 +15,16 @@ const DEFAULT_CONFIG_URL =
 const HOST_RE = /(^|\.)whatsapp\.(com|net)$/i;
 const WAME_RE = /^wa\.me$/i;
 
+const WA_TAB_TRACKING = {
+  sessionKey: 'waTabsLastSeen',
+  ttlMs: 2 * 60 * 1000 // 2 min: evita "grudar" e afetar outras páginas
+};
+
+const POLICY_REFRESH_SCHEDULE = {
+  alarmName: 'wa-dl-guard-refresh-policy',
+  periodMinutes: 60
+};
+
 // ===================== Utils =====================
 const getHost = (u) => { try { return new URL(u).hostname; } catch { return ''; } };
 const isWAHost = (h) => HOST_RE.test(h) || WAME_RE.test(h);
@@ -72,6 +82,54 @@ async function notifyOnce(downloadId, message, title = 'WhatsApp Download Guard'
 async function cancelAndErase(id) {
   try { await chrome.downloads.cancel(id); } catch {}
   try { await chrome.downloads.erase({ id }); } catch {}
+}
+
+// ===================== Rastreamento de abas WhatsApp =====================
+async function markWATab(tabId) {
+  if (!Number.isInteger(tabId) || tabId < 0) return;
+  try {
+    const data = await chrome.storage.session.get(WA_TAB_TRACKING.sessionKey);
+    const current = data?.[WA_TAB_TRACKING.sessionKey];
+    const map = (current && typeof current === 'object') ? current : {};
+    map[String(tabId)] = Date.now();
+    await chrome.storage.session.set({ [WA_TAB_TRACKING.sessionKey]: map });
+  } catch {}
+}
+
+async function clearWATab(tabId) {
+  if (!Number.isInteger(tabId) || tabId < 0) return;
+  try {
+    const data = await chrome.storage.session.get(WA_TAB_TRACKING.sessionKey);
+    const current = data?.[WA_TAB_TRACKING.sessionKey];
+    const map = (current && typeof current === 'object') ? current : {};
+    const key = String(tabId);
+    if (Object.prototype.hasOwnProperty.call(map, key)) {
+      delete map[key];
+      await chrome.storage.session.set({ [WA_TAB_TRACKING.sessionKey]: map });
+    }
+  } catch {}
+}
+
+async function isRecentWATab(tabId) {
+  if (!Number.isInteger(tabId) || tabId < 0) return false;
+  try {
+    const data = await chrome.storage.session.get(WA_TAB_TRACKING.sessionKey);
+    const current = data?.[WA_TAB_TRACKING.sessionKey];
+    const map = (current && typeof current === 'object') ? current : {};
+    const key = String(tabId);
+    const lastSeen = Number(map[key] || 0);
+    if (!lastSeen) return false;
+
+    const now = Date.now();
+    if (now - lastSeen > WA_TAB_TRACKING.ttlMs) {
+      delete map[key];
+      await chrome.storage.session.set({ [WA_TAB_TRACKING.sessionKey]: map });
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // ===================== Policy remota =====================
@@ -136,15 +194,20 @@ async function isEnabled() {
 }
 
 // ===================== Origem WhatsApp =====================
-function isFromWhatsApp(item) {
+async function isFromWhatsApp(item) {
   if (item?.byExtensionId === chrome.runtime.id) return false;
 
   const url = item?.finalUrl || item?.url || '';
   const ref = item?.referrer || '';
   if (isWAUrl(url)) return true;
   if (isWAUrl(ref)) return true;
-  // blob/data vindos do WA frequentemente chegam sem referrer — trate como WA
-  if (isBlobOrData(url)) return true;
+
+  // blob/data: muitos sites usam isso; só trate como WhatsApp se houver referrer WA
+  // ou se o download veio de uma aba que foi vista recentemente no WhatsApp.
+  if (isBlobOrData(url)) {
+    if (ref) return isWAUrl(ref);
+    return await isRecentWATab(item?.tabId);
+  }
   return false;
 }
 
@@ -177,7 +240,7 @@ const processedDownloads = new Map();
 chrome.downloads.onDeterminingFilename.addListener(async (item /*, suggest */) => {
   try {
     if (!(await isEnabled())) return;
-    if (!isFromWhatsApp(item)) return;
+    if (!(await isFromWhatsApp(item))) return;
 
     // Marca como processado neste evento
     processedDownloads.set(item.id, 'onDeterminingFilename');
@@ -206,7 +269,7 @@ chrome.downloads.onDeterminingFilename.addListener(async (item /*, suggest */) =
 chrome.downloads.onCreated.addListener(async (item) => {
   try {
     if (!(await isEnabled())) return;
-    if (!isFromWhatsApp(item)) return;
+    if (!(await isFromWhatsApp(item))) return;
     
     // Se já foi processado no onDeterminingFilename, ignora
     if (processedDownloads.has(item.id)) {
@@ -240,6 +303,19 @@ chrome.downloads.onCreated.addListener(async (item) => {
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (!msg || !msg.type) return;
 
+  if (msg.type === 'wa-tab-ping') {
+    const tabId = _sender?.tab?.id;
+    const url = msg?.url || _sender?.url || _sender?.tab?.url || '';
+    if (isWAUrl(url)) markWATab(tabId);
+    return;
+  }
+
+  if (msg.type === 'wa-tab-clear') {
+    const tabId = _sender?.tab?.id;
+    clearWATab(tabId);
+    return;
+  }
+
   if (msg.type === 'refresh-policy') {
     (async () => {
       try {
@@ -261,6 +337,19 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   }
 });
 
+function ensurePolicyRefreshAlarm() {
+  try {
+    chrome.alarms.create(POLICY_REFRESH_SCHEDULE.alarmName, {
+      periodInMinutes: POLICY_REFRESH_SCHEDULE.periodMinutes
+    });
+  } catch {}
+}
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm?.name !== POLICY_REFRESH_SCHEDULE.alarmName) return;
+  return refreshPolicy(false);
+});
+
 // Bootstrap
 chrome.runtime.onInstalled.addListener(async () => {
   const data = await chrome.storage.local.get([STORAGE.enabled, STORAGE.configUrl]);
@@ -270,6 +359,13 @@ chrome.runtime.onInstalled.addListener(async () => {
   if (!data[STORAGE.configUrl]) {
     await chrome.storage.local.set({ [STORAGE.configUrl]: DEFAULT_CONFIG_URL });
   }
-  // sem policy default — apenas tenta buscar
-  refreshPolicy(true);
+
+  ensurePolicyRefreshAlarm();
+
+  // busca/aplica a policy já na instalação/atualização
+  await refreshPolicy(false);
+});
+
+chrome.runtime.onStartup.addListener(() => {
+  ensurePolicyRefreshAlarm();
 });

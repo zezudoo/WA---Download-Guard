@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "WA - Download Guard 🛡️",
   "short_name": "WA DL Guard",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Bloqueia downloads potencialmente maliciosos do WhatsApp.",
   "minimum_chrome_version": "114",
   "icons": {
@@ -15,7 +15,8 @@
   "permissions": [
     "downloads",
     "notifications",
-    "storage"
+    "storage",
+    "alarms"
   ],
   "host_permissions": [
     "https://*.whatsapp.com/*",

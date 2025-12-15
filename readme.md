@@ -31,7 +31,7 @@ O **WA - Download Guard** monitora downloads iniciados no **WhatsApp Web** e **b
 
 ## Recursos
 
-* ✅ **Preload das regras** — carrega/recacheia as listas ao iniciar o navegador, ao instalar/atualizar a extensão e ao abrir o WhatsApp Web.
+* ✅ **Preload das regras** — busca e aplica a policy ao instalar/atualizar e revalida a cada 60 minutos.
 * ✅ **Listas flexíveis** — por **extensão** (ex.: `.zip`, `.exe`, `.js`) e, opcionalmente, por **MIME type**.
 * ✅ **Aviso amigável** — feedback visual quando um download é bloqueado.
 * ✅ **100% local** — nada sai do navegador; sem backend.
@@ -45,8 +45,9 @@ O **WA - Download Guard** monitora downloads iniciados no **WhatsApp Web** e **b
 3. Se **não permitido**, cancela o download e registra o motivo (e mostra um aviso, se ativado).
 4. As **regras** vivem no `chrome.storage` e são recarregadas em:
 
-   * `onInstalled` / `onStartup`
-   * Quando detectar/ativar uma aba `web.whatsapp.com`
+   * `onInstalled` (instalação/atualização)
+   * A cada 60 minutos (`chrome.alarms`)
+   * Manualmente em Opções > "Atualizar agora"
 
 ---
 
@@ -67,12 +68,14 @@ O **WA - Download Guard** monitora downloads iniciados no **WhatsApp Web** e **b
 
 * `downloads`: interceptar/cancelar downloads não permitidos.
 * `storage`: guardar configurações e listas localmente.
-* Host `https://web.whatsapp.com/*`: monitorar somente essa origem.
+* `alarms`: atualizar a policy automaticamente a cada 60 minutos.
+* Host `https://*.whatsapp.com/*`, `https://*.whatsapp.net/*`, `https://wa.me/*`: escopo do WhatsApp.
+* Host `https://wazap.coopavel.com.br/*`: permitir baixar a allowlist padrão.
 
 **Privacidade**
 
 * **Sem coleta de dados pessoais.**
-* **Sem chamadas externas.**
+* **Busca apenas a policy (allowlist) na URL configurada.**
 * Tudo fica **no seu navegador**.
 
 ---

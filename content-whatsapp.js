@@ -1,5 +1,22 @@
 // content-whatsapp.js
 (() => {
+  // Mantém o SW informado que esta aba é do WhatsApp (evita bloquear blob:/data: de outros sites).
+  // Importante: roda só no top-frame (o content script está com all_frames=true).
+  const isTopFrame = (() => {
+    try { return window.top === window; } catch { return true; }
+  })();
+  if (isTopFrame) {
+    const pingWATab = () => {
+      try { chrome.runtime?.sendMessage?.({ type: 'wa-tab-ping', url: location.href }); } catch {}
+    };
+    pingWATab();
+    const pingTimer = setInterval(pingWATab, 60_000);
+    window.addEventListener('pagehide', () => {
+      clearInterval(pingTimer);
+      try { chrome.runtime?.sendMessage?.({ type: 'wa-tab-clear' }); } catch {}
+    });
+  }
+
   // ======== Estado: enabled + policy ========
   let enabled = true;      // controlado pelas opções
   let hasPolicy = false;   // sem policy => bloqueia tudo (quando enabled)
