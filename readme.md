@@ -32,7 +32,7 @@ O **WA - Download Guard** monitora downloads iniciados no **WhatsApp Web** e **b
 ## Recursos
 
 * ✅ **Preload das regras** — busca e aplica a policy ao instalar/atualizar e revalida a cada 60 minutos.
-* ✅ **Listas flexíveis** — por **extensão** (ex.: `.zip`, `.exe`, `.js`) e, opcionalmente, por **MIME type**.
+* ✅ **Listas flexíveis** — por **extensão** (ex.: `.zip`, `.exe`, `.js`) e por **MIME type**.
 * ✅ **Aviso amigável** — feedback visual quando um download é bloqueado.
 * ✅ **100% local** — nada sai do navegador; sem backend.
 
@@ -45,9 +45,10 @@ O **WA - Download Guard** monitora downloads iniciados no **WhatsApp Web** e **b
 3. Se **não permitido**, cancela o download e registra o motivo (e mostra um aviso, se ativado).
 4. As **regras** vivem no `chrome.storage` e são recarregadas em:
 
-   * `onInstalled` (instalação/atualização)
-   * A cada 60 minutos (`chrome.alarms`)
-   * Manualmente em Opções > "Atualizar agora"
+* `onInstalled` (instalação/atualização)
+* `onStartup` (início do navegador)
+* A cada 60 minutos (`chrome.alarms`)
+* Manualmente em Opções > "Atualizar agora"
 
 ---
 
@@ -82,25 +83,29 @@ O **WA - Download Guard** monitora downloads iniciados no **WhatsApp Web** e **b
 
 ## Configuração
 
-Abra a página de **Opções** para ajustar as regras.
+Abra a página de **Opções** para ajustar a URL da allowlist.
 Não há controle de ligar/desligar — o bloqueio é sempre ativo.
 
-**Exemplo de configuração (conceito):**
+**Exemplo mínimo de allowlist:**
 
 ```json
 {
-  "mode": "denylist",
-  "deny": ["exe", "bat", "cmd", "js", "jar", "msi", "ps1", "zip", "rar", "7z"],
-  "allow": [],
-  "mimeDeny": ["application/x-msdownload"],
-  "showToast": true
+  "schema_version": 1,
+  "updated_at": "2026-01-14T12:00:00Z",
+  "mode": "allow",
+  "default_action": "block",
+  "ttl_seconds": 3600,
+  "allowed": {
+    "extensions": ["pdf", "png"],
+    "mime_types": ["application/pdf", "image/png"]
+  }
 }
 ```
 
-* **mode**: `denylist` (bloquear lista) ou `allowlist` (permitir só a lista).
-* **deny/allow**: extensões sem ponto (ex.: `"zip"`).
-* **mimeDeny**: bloqueio por MIME, se precisar.
-* **showToast**: habilita/desabilita o aviso visual.
+Notas rápidas:
+* extensões em minúsculas, sem ponto.
+* inclua os principais MIME types do seu ambiente.
+* se o MIME vier genérico (ex.: `application/octet-stream`), a decisão cai na extensão.
 
 ---
 
@@ -145,12 +150,12 @@ Lá você encontra:
 
 **“O primeiro download proibido passou.”**
 
-* Verifique se o preload roda em `onInstalled`, `onStartup` e ao abrir `web.whatsapp.com`.
-* Feche e reabra o Chrome pra validar o fluxo de inicialização.
+* Verifique se o preload roda em `onInstalled`, `onStartup` e no alarme de atualização (a cada 60 min).
+* Use **Atualizar agora** em Opções para forçar a atualização da policy.
 
 **“Quero liberar só PDF e PNG.”**
 
-* Use `allowlist` com `["pdf", "png"]`. O resto vai ser bloqueado.
+* Use `allowed.extensions` com `["pdf", "png"]` e `allowed.mime_types` com `["application/pdf", "image/png"]`.
 
 **“Apareceram dois avisos (toasts) por um único bloqueio.”**
 

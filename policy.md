@@ -56,7 +56,7 @@ A policy é hospedada em um **Gist RAW** (ou qualquer host com CORS) e carregada
 **Content Script (na página do WhatsApp):**
 
 * **Sem policy carregada:** bloqueia **tudo** na origem (toast na página).
-* **Com policy carregada:** **só libera** se a **extensão** estiver na allowlist.
+* **Com policy carregada:** bloqueia quando a **extensão** é detectada e não está na allowlist; se não houver extensão detectável, o SW decide.
 
 **Service Worker (downloads):**
 
@@ -67,6 +67,7 @@ A policy é hospedada em um **Gist RAW** (ou qualquer host com CORS) e carregada
 
     * **Precisa** estar em `allowed.mime_types`;
     * **E**, se houver **extensão**, ela **também** precisa estar em `allowed.extensions`.
+    * **MIME genérico** (ex.: `application/octet-stream`) é tratado como ausente.
   * Se **MIME** **não** existir:
 
     * Exige que a **extensão** esteja em `allowed.extensions`.

@@ -22,14 +22,29 @@
   let hasPolicy = false;   // sem policy => bloqueia tudo (quando enabled)
   let allowedExts = new Set(); // vazio até carregar policy
 
+  const normalizeExt = (value) => {
+    const raw = String(value || '').trim().toLowerCase().replace(/^\.+/, '');
+    return raw;
+  };
+  const normalizeExtList = (list) => {
+    if (!Array.isArray(list)) return [];
+    return list.map(normalizeExt).filter(Boolean);
+  };
+  const applyPolicy = (policy) => {
+    const list = normalizeExtList(policy?.allowed?.extensions);
+    if (list.length) {
+      hasPolicy = true;
+      allowedExts = new Set(list);
+    } else {
+      hasPolicy = false;
+      allowedExts = new Set();
+    }
+  };
+
   // carrega enabled + policy
   chrome.storage.local.get(['enabled', 'policy']).then(({ enabled: en, policy }) => {
     if (en === false) enabled = false;
-    const list = policy?.allowed?.extensions;
-    if (Array.isArray(list) && list.length) {
-      hasPolicy = true;
-      allowedExts = new Set(list.map((s) => String(s).toLowerCase()));
-    }
+    applyPolicy(policy);
   });
 
   // observa mudanças em runtime
@@ -39,15 +54,7 @@
       enabled = changes.enabled.newValue !== false;
     }
     if (Object.prototype.hasOwnProperty.call(changes, 'policy')) {
-      const p = changes.policy?.newValue;
-      const list = p?.allowed?.extensions;
-      if (Array.isArray(list) && list.length) {
-        hasPolicy = true;
-        allowedExts = new Set(list.map((s) => String(s).toLowerCase()));
-      } else {
-        hasPolicy = false;
-        allowedExts = new Set();
-      }
+      applyPolicy(changes.policy?.newValue);
     }
   });
 
@@ -120,13 +127,24 @@
       if (!host) return;
       const el = document.createElement('div');
       el.className = 'wa-dl-guard-toast';
-      el.innerHTML = `
-        <div class="wa-dl-guard-toast-header">
-          <div class="wa-dl-guard-toast-icon">🛡️</div>
-          <div class="title">${title}</div>
-        </div>
-        <div class="msg">${msg || ''}</div>
-      `;
+      const header = document.createElement('div');
+      header.className = 'wa-dl-guard-toast-header';
+
+      const icon = document.createElement('div');
+      icon.className = 'wa-dl-guard-toast-icon';
+      icon.textContent = '🛡️';
+
+      const titleEl = document.createElement('div');
+      titleEl.className = 'title';
+      titleEl.textContent = title;
+
+      header.append(icon, titleEl);
+
+      const msgEl = document.createElement('div');
+      msgEl.className = 'msg';
+      msgEl.textContent = msg || '';
+
+      el.append(header, msgEl);
       host.appendChild(el);
       void el.offsetHeight;
       el.classList.add('show');
@@ -147,20 +165,21 @@
 
   const extFromFilename = (name) => {
     if (!name) return '';
-    const clean = name.split(/[?#]/)[0];
-    const last = clean.split('/').pop() || '';
+    const clean = String(name).trim();
+    if (!clean) return '';
+    const last = clean.split(/[\\/]/).pop() || '';
     const dot = last.lastIndexOf('.');
     if (dot <= 0) return '';
-    return last.slice(dot + 1).toLowerCase();
+    return normalizeExt(last.slice(dot + 1));
   };
   const extFromUrl = (url) => { try { return extFromFilename(new URL(url, location.href).pathname); } catch { return ''; } };
 
-  // sem policy => bloquear tudo; com policy => liberar só extensão permitida
+  // sem policy => bloquear tudo; com policy => liberar extensão permitida; sem extensão => deixa o SW decidir
   const shouldBlockByExt = (href, downloadAttr) => {
     if (!enabled) return false; // desativado → nunca bloquear
     if (!hasPolicy) return true;
     const ext = (downloadAttr && extFromFilename(downloadAttr)) || extFromUrl(href);
-    if (!ext) return true;
+    if (!ext) return false;
     return !allowedExts.has(ext);
   };
 
